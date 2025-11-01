@@ -1,0 +1,74 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: workflow-orchestrator
+  labels:
+    app: workflow-orchestrator
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: workflow-orchestrator
+  template:
+    metadata:
+      labels:
+        app: workflow-orchestrator
+    spec:
+      containers:
+      - name: orchestrator
+        image: workflow-orchestrator:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8080
+          name: http
+          protocol: TCP
+        - containerPort: 50051
+          name: grpc
+          protocol: TCP
+        env:
+        - name: K8S_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: IN_CLUSTER_CONFIG
+          value: "true"
+        - name: K8S_SERVICE_NAME
+          value: "workflow-engines"
+        - name: K8S_LABEL_SELECTOR
+          value: "app=workflow-engine"
+        - name: TRANSPORT_TYPE
+          value: "grpc"
+        - name: LOAD_BALANCER_TYPE
+          value: "consistent-hash"
+        - name: GRPC_PORT
+          value: "50051"
+        - name: ENGINE_DISCOVERY_INTERVAL
+          value: "30"
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "200m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: workflow-orchestrator
+  labels:
+    app: workflow-orchestrator
+spec:
+  selector:
+    app: workflow-orchestrator
+  ports:
+  - port: 8080
+    targetPort: 8080
+    protocol: TCP
+    name: http
+  - port: 50051
+    targetPort: 50051
+    protocol: TCP
+    name: grpc
+  type: ClusterIP
+

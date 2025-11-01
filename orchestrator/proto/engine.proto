@@ -1,0 +1,43 @@
+syntax = "proto3";
+
+package orchestrator;
+
+option go_package = "github.com/gbasilveira/dag-engine/orchestrator/proto";
+
+// This file contains additional engine-specific message types
+// The main service definitions are in orchestrator.proto
+
+// WorkflowDefinition contains a complete workflow definition
+message WorkflowDefinition {
+  string workflow_id = 1;
+  string version = 2;
+  string name = 3;
+  string description = 4;
+  repeated NodeDefinition nodes = 5;
+  map<string, string> metadata = 6;
+  int64 created_at = 7;
+  int64 updated_at = 8;
+}
+
+// NodeDefinition defines a single node in a workflow
+message NodeDefinition {
+  string node_id = 1;
+  repeated string dependencies = 2;
+  string executor_type = 3;
+  string executor_code = 4;
+  map<string, string> executor_config = 5;
+  map<string, string> metadata = 6;
+}
+
+// LoadWorkflowRequest requests loading a workflow definition
+message LoadWorkflowRequest {
+  string workflow_id = 1;
+  string version = 2; // Empty means latest
+}
+
+// LoadWorkflowResponse contains the workflow definition
+message LoadWorkflowResponse {
+  bool found = 1;
+  WorkflowDefinition workflow = 2;
+}
+

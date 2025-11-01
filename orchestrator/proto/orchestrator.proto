@@ -1,0 +1,289 @@
+syntax = "proto3";
+
+package orchestrator;
+
+option go_package = "github.com/gbasilveira/dag-engine/orchestrator/proto";
+
+// OrchestratorService defines the service that engines call to register and communicate with the orchestrator
+service OrchestratorService {
+  // RegisterEngine registers an engine with the orchestrator
+  rpc RegisterEngine(RegisterEngineRequest) returns (RegisterEngineResponse);
+  
+  // ReportStatus reports the status of a workflow execution
+  rpc ReportStatus(StatusReport) returns (StatusReportAck);
+  
+  // StreamStatus streams status updates (bidirectional)
+  rpc StreamStatus(stream StatusUpdate) returns (stream StatusUpdate);
+}
+
+// EngineService defines the service that orchestrator calls to control engines
+service EngineService {
+  // ExecuteWorkflow requests an engine to execute a workflow
+  rpc ExecuteWorkflow(WorkflowRequest) returns (WorkflowResponse);
+  
+  // ExecuteSubWorkflow requests execution of a sub-workflow
+  rpc ExecuteSubWorkflow(SubWorkflowRequest) returns (SubWorkflowResponse);
+  
+  // HealthCheck checks engine health
+  rpc HealthCheck(HealthCheckRequest) returns (HealthCheckResponse);
+  
+  // StopWorkflow stops a running workflow
+  rpc StopWorkflow(StopWorkflowRequest) returns (StopWorkflowResponse);
+  
+  // GetEngineStatus returns current engine status
+  rpc GetEngineStatus(EngineStatusRequest) returns (EngineStatusResponse);
+  
+  // StreamWorkflowEvents streams workflow execution events (server streaming)
+  rpc StreamWorkflowEvents(WorkflowEventsRequest) returns (stream WorkflowEvent);
+}
+
+// RegisterEngineRequest contains engine registration information
+message RegisterEngineRequest {
+  string engine_id = 1;
+  string address = 2;
+  int32 port = 3;
+  map<string, string> metadata = 4;
+  int32 capacity = 5; // Maximum concurrent workflows
+}
+
+// RegisterEngineResponse confirms engine registration
+message RegisterEngineResponse {
+  bool success = 1;
+  string message = 2;
+  string orchestrator_address = 3;
+}
+
+// StatusReport contains status information from an engine
+message StatusReport {
+  string engine_id = 1;
+  string workflow_id = 2;
+  string execution_id = 3;
+  WorkflowStatus status = 4;
+  map<string, string> metadata = 5;
+  int64 timestamp = 6;
+}
+
+// StatusReportAck acknowledges receipt of status report
+message StatusReportAck {
+  bool received = 1;
+}
+
+// StatusUpdate is used for bidirectional streaming
+message StatusUpdate {
+  string engine_id = 1;
+  string workflow_id = 2;
+  string execution_id = 3;
+  WorkflowStatus status = 4;
+  map<string, string> data = 5;
+  int64 timestamp = 6;
+}
+
+// WorkflowRequest requests execution of a workflow
+message WorkflowRequest {
+  string workflow_id = 1;
+  string workflow_version = 2;
+  string execution_id = 3;
+  map<string, string> inputs = 4;
+  string parent_workflow_id = 5; // For sub-workflows
+  string parent_execution_id = 6; // For sub-workflows
+  int64 timeout_seconds = 7;
+}
+
+// WorkflowResponse contains workflow execution result
+message WorkflowResponse {
+  string execution_id = 1;
+  bool success = 2;
+  string error_message = 3;
+  map<string, string> outputs = 4;
+  int64 duration_nanoseconds = 5;
+  repeated NodeResult node_results = 6;
+}
+
+// NodeResult contains the result of a single node execution
+message NodeResult {
+  string node_id = 1;
+  string status = 2;
+  map<string, string> outputs = 3;
+  string error_message = 4;
+}
+
+// SubWorkflowRequest requests execution of a sub-workflow
+message SubWorkflowRequest {
+  string sub_workflow_id = 1;
+  string sub_workflow_version = 2;
+  string parent_workflow_id = 3;
+  string parent_execution_id = 4;
+  string execution_id = 5;
+  map<string, string> inputs = 6;
+  int64 timeout_seconds = 7;
+}
+
+// SubWorkflowResponse contains sub-workflow execution result
+message SubWorkflowResponse {
+  string execution_id = 1;
+  bool success = 2;
+  string error_message = 3;
+  map<string, string> outputs = 4;
+  int64 duration_nanoseconds = 5;
+}
+
+// HealthCheckRequest requests engine health status
+message HealthCheckRequest {
+  string request_id = 1;
+}
+
+// HealthCheckResponse contains engine health information
+message HealthCheckResponse {
+  bool healthy = 1;
+  string status = 2;
+  int32 active_workflows = 3;
+  int32 capacity = 4;
+  map<string, string> metadata = 5;
+}
+
+// StopWorkflowRequest requests stopping a workflow
+message StopWorkflowRequest {
+  string execution_id = 1;
+  string reason = 2;
+}
+
+// StopWorkflowResponse confirms workflow stop
+message StopWorkflowResponse {
+  bool stopped = 1;
+  string message = 2;
+}
+
+// EngineStatusRequest requests engine status
+message EngineStatusRequest {
+  string request_id = 1;
+}
+
+// EngineStatusResponse contains engine status
+message EngineStatusResponse {
+  string engine_id = 1;
+  string status = 2;
+  int32 active_workflows = 3;
+  int32 capacity = 4;
+  repeated string running_workflows = 5;
+  map<string, string> metadata = 6;
+}
+
+// WorkflowEventsRequest requests workflow event stream
+message WorkflowEventsRequest {
+  string execution_id = 1;
+  string workflow_id = 2;
+}
+
+// WorkflowEvent represents a workflow execution event
+message WorkflowEvent {
+  string event_type = 1;
+  string execution_id = 2;
+  string workflow_id = 3;
+  string node_id = 4;
+  string status = 5;
+  map<string, string> data = 6;
+  int64 timestamp = 7;
+}
+
+// WorkflowStatus represents the status of a workflow
+enum WorkflowStatus {
+  WORKFLOW_UNKNOWN = 0;
+  WORKFLOW_PENDING = 1;
+  WORKFLOW_RUNNING = 2;
+  WORKFLOW_COMPLETED = 3;
+  WORKFLOW_FAILED = 4;
+  WORKFLOW_CANCELLED = 5;
+  WORKFLOW_PAUSED = 6;
+}
+
+// ManagementService defines the service for managing workflows via YAML/proto definitions
+service ManagementService {
+  // RegisterWorkflow registers a workflow from a WorkflowDefinition
+  rpc RegisterWorkflow(RegisterWorkflowRequest) returns (RegisterWorkflowResponse);
+  
+  // UpdateWorkflow updates an existing workflow
+  rpc UpdateWorkflow(UpdateWorkflowRequest) returns (UpdateWorkflowResponse);
+  
+  // DeleteWorkflow deletes a workflow
+  rpc DeleteWorkflow(DeleteWorkflowRequest) returns (DeleteWorkflowResponse);
+  
+  // ListWorkflows lists all registered workflows
+  rpc ListWorkflows(ListWorkflowsRequest) returns (ListWorkflowsResponse);
+  
+  // GetWorkflow retrieves a specific workflow
+  rpc GetWorkflow(GetWorkflowRequest) returns (GetWorkflowResponse);
+}
+
+// RegisterWorkflowRequest contains workflow definition for registration
+message RegisterWorkflowRequest {
+  WorkflowDefinition workflow = 1;
+}
+
+// RegisterWorkflowResponse confirms workflow registration
+message RegisterWorkflowResponse {
+  bool success = 1;
+  string message = 2;
+  string workflow_id = 3;
+  string version = 4;
+}
+
+// UpdateWorkflowRequest contains updated workflow definition
+message UpdateWorkflowRequest {
+  WorkflowDefinition workflow = 1;
+  bool force = 2; // Force update even if dependents exist
+}
+
+// UpdateWorkflowResponse confirms workflow update
+message UpdateWorkflowResponse {
+  bool success = 1;
+  string message = 2;
+  string workflow_id = 3;
+  string version = 4;
+}
+
+// DeleteWorkflowRequest contains workflow identification for deletion
+message DeleteWorkflowRequest {
+  string workflow_id = 1;
+  string version = 2; // Empty means delete all versions
+  bool force = 3; // Force delete even if dependents exist
+}
+
+// DeleteWorkflowResponse confirms workflow deletion
+message DeleteWorkflowResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+// ListWorkflowsRequest requests list of workflows
+message ListWorkflowsRequest {
+  string filter = 1; // Optional filter (future: label selector, etc.)
+}
+
+// ListWorkflowsResponse contains list of workflows
+message ListWorkflowsResponse {
+  repeated WorkflowInfo workflows = 1;
+}
+
+// WorkflowInfo contains summary information about a workflow
+message WorkflowInfo {
+  string workflow_id = 1;
+  string name = 2;
+  string version = 3;
+  string description = 4;
+  int64 created_at = 5;
+  int64 updated_at = 6;
+  map<string, string> metadata = 7;
+}
+
+// GetWorkflowRequest requests a specific workflow
+message GetWorkflowRequest {
+  string workflow_id = 1;
+  string version = 2; // Empty means latest version
+}
+
+// GetWorkflowResponse contains the workflow definition
+message GetWorkflowResponse {
+  bool found = 1;
+  WorkflowDefinition workflow = 2;
+}
+

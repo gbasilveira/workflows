@@ -1,0 +1,75 @@
+apiVersion: workflows/v1
+kind: Workflow
+metadata:
+  id: "data-pipeline"
+  name: "Data Processing Pipeline"
+  version: "1.0.0"
+  description: "Extract, transform, and load data pipeline"
+  labels:
+    team: "data-engineering"
+    environment: "production"
+spec:
+  nodes:
+    - id: "extract"
+      executor:
+        type: "lua"
+        code: |
+          print("Extracting data from source...")
+          return {data = "extracted", count = 1000}
+      dependencies: []
+      metadata:
+        timeout: 300
+        retries: 3
+    
+    - id: "transform"
+      executor:
+        type: "lua"
+        code: |
+          print("Transforming data...")
+          return {data = "transformed"}
+      dependencies: ["extract"]
+      metadata:
+        timeout: 600
+    
+    - id: "load"
+      executor:
+        type: "lua"
+        code: |
+          print("Loading data to destination...")
+          return {status = "loaded"}
+      dependencies: ["transform"]
+      metadata:
+        timeout: 300
+
+  triggers:
+    http:
+      port: 8080
+      path: "/trigger/data-pipeline"
+      method: "POST"
+      timeout_seconds: 600
+    
+    cron:
+      schedule: "0 */5 * * * *"
+      timezone: "UTC"
+
+  configuration:
+    secrets:
+      - name: "db-credentials"
+        namespace: "default"
+        keys:
+          username: "DB_USERNAME"
+          password: "DB_PASSWORD"
+      - name: "api-keys"
+        mount_path: "/etc/secrets/api"
+    
+    kubernetes:
+      resource_limits:
+        cpu: "500m"
+        memory: "512Mi"
+      annotations:
+        workflow.managed-by: "workflow-orchestrator"
+      service_account: "workflow-executor"
+    
+    env:
+      LOG_LEVEL: "info"
+      ENVIRONMENT: "production"
